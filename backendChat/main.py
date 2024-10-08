@@ -8,12 +8,6 @@ from packageExperiment.linux import writeLinuxFile
 from packageExperiment.windows import writeWindowsFIle
 from settings import *
 import tempfile
-from datetime import datetime
-import pytz
-
-# Specify your timezone (e.g., 'America/New_York', 'Europe/London', etc.)
-timezone = pytz.timezone('Europe/London')
-
 
 HOST_VOLUME_PATH = ""
 PROJECTS_LOCATION = 'projects'
@@ -85,7 +79,7 @@ def upload_file():
             projectLocation = os.path.join(PROJECTS_LOCATION, projectUuid)
 
             if os.path.exists(projectLocation) and os.path.isdir(projectLocation):
-                number = datetime.now(timezone).strftime("%m%d_%H%M")
+                number = datetime.now().strftime("%m%d%H%M")
                 newProjectUuid = f"{projectUuid}_{number}"
                 projectLocation = os.path.join(PROJECTS_LOCATION, newProjectUuid)
                 print(f"ProjectLocation '{projectLocation}' has been changed.")
@@ -681,7 +675,7 @@ def buildDockerImageChat(projectUuid):
     try:
         dockerClientResult = startDockerClient()
         dockerClient, port = dockerClientResult["dockerClient"], dockerClientResult["port"]
-        number = datetime.now(timezone).strftime("%Y%m%d%H%M%S")
+        number = datetime.now().strftime("%Y%m%d%H%M%S")
         # TODO comentar
         # try:
         #     # Build the image and stream the logs in real-time
@@ -988,7 +982,7 @@ def nasa(surveyId):
     requestData = json.loads(request.data)
 
     # Step 2: Specify the filename
-    number = surveyId + datetime.now(timezone).strftime("%y%m%d_%H%M")
+    number = surveyId + datetime.now().strftime("%y%m%d_%H%M")
     file_path = os.path.join(QUESTIONNAIRES_LOCATION, f"{number}.json")
 
     # Step 3: Write the dictionary to a JSON file
@@ -1020,8 +1014,6 @@ if __name__ == '__main__':
             print(f"Folder '{QUESTIONNAIRES_LOCATION}' created.")
         else:
             print(f"Folder '{QUESTIONNAIRES_LOCATION}' already exists.")
-        number = datetime.now(timezone).strftime("%Y%m%d%H%M%S")
-        print(number)
 
         app.run(host='0.0.0.0', port=8080)
     except Exception as e:
@@ -1062,7 +1054,7 @@ if __name__ == '__main__':
     #     print(f"Error: Volume path does not exist: {volume_path}")
     #
     # # Get current timestamp for unique container name
-    # number = datetime.now(timezone).strftime("%Y%m%d%H%M%S")
+    # number = datetime.now().strftime("%Y%m%d%H%M%S")
     # project_image = "tutorial_project:20240926180050"  # Ensure this image exists
     #
     # # Start Docker client
@@ -1096,7 +1088,7 @@ if __name__ == '__main__':
 
     # dockerClientResult = startDockerClient()
     # dockerClient, port = dockerClientResult["dockerClient"], dockerClientResult["port"]
-    # number = datetime.now(timezone).strftime("%Y%m%d%H%M%S")
+    # number = datetime.now().strftime("%Y%m%d%H%M%S")
     # projectUuid = "tutorial_project"
     # projectPath = 'projects/' + projectUuid + "/"
     # #
