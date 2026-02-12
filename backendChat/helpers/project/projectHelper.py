@@ -50,14 +50,12 @@ def read_first_50_lines(file_path):
         print(f"Error reading {file_path}: {e}")
     return lines
 
-
 def fileIsAnImage(file):
     if file.endswith('.bmp') or file.endswith('.gif') or file.endswith(
             '.jpeg') or file.endswith('.jpg') or file.endswith('.png') or file.endswith('.svg'):
         return True
     else:
         return False
-
 
 def startDockerClient():
     # Seleciona uma porta disponível
@@ -92,26 +90,6 @@ def startDockerClient():
     print("Selected Port: " + str(port))
     return {"dockerClient": client, "port": port}
 
-def startDockerClient1():
-    # Select an available port (optional and for your use)
-    sock = socket.socket()
-    sock.bind(('', 0))
-
-    try:
-        # On Windows with Docker Desktop, this is always the safest approach
-        print("Attempting to use Docker Desktop context via docker.from_env()...")
-        client = docker.from_env()
-        client.ping()  # Test connection
-        print("✅ Connected to Docker successfully.")
-
-    except docker.errors.DockerException as e:
-        print(f"❌ Failed to connect to Docker: {str(e)}")
-        raise Exception("Docker is not running or not accessible from this environment.")
-
-    port = sock.getsockname()[1]
-    print("Selected Port:", port)
-    return {"dockerClient": client, "port": port}
-
 def createNetworkIfNotExists(dockerClient, networkName):
     allNetworks = dockerClient.networks.list()
     thereIsNetwork = False
@@ -120,7 +98,6 @@ def createNetworkIfNotExists(dockerClient, networkName):
             thereIsNetwork = True
             break
     if not thereIsNetwork:
-        # dockerClient.networks.create("network1a", driver="bridge")
         dockerClient.networks.create(name=networkName)
 
 

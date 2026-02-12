@@ -166,7 +166,7 @@ parameters:
       JSON string containing the dataset metadata in Zenodo deposition format
   - name: files
     in: formData
-    required: true
+    required: false
     type: file
     description: >
       One or more files to upload to Zenodo (ZIP, CSV, images, code, etc.).

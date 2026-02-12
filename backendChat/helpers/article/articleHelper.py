@@ -15,7 +15,6 @@ from werkzeug.utils import secure_filename
 from helpers.article.metadata_template import ZENODO_METADATA_TEMPLATE
 from helpers.index import appendMessage, callGPTModel, _extract_json_safe
 
-ALLOWED_EXTENSIONS = None  # or set: {"zip","pdf","txt","csv","json","yaml","yml","png","jpg"} etc.
 ZENODO_API_BASE = "https://zenodo.org/api"
 BASE = "https://www.f-uji.net"
 
@@ -627,67 +626,6 @@ def _deep_merge(base: Any, patch: Any) -> Any:
         return out
     return copy.deepcopy(patch)
 
-
-def _strip_license_urls_from_text_fields(metadata: Dict[str, Any]) -> Dict[str, Any]:
-    url_rx = re.compile(r"https?://creativecommons\.org/licenses/[^\s<>\"]+", re.IGNORECASE)
-
-    def _clean(s: Any) -> Any:
-        if not isinstance(s, str):
-            return s
-        return url_rx.sub("", s).strip()
-
-    for k in ("description", "notes", "access_conditions"):
-        if k in metadata:
-            metadata[k] = _clean(metadata[k])
-
-    if isinstance(metadata.get("references"), list):
-        metadata["references"] = [_clean(x) for x in metadata["references"]]
-
-    return metadata
-
-
-def _validate_minimal_zenodo_metadata(metadata: Dict[str, Any]) -> None:
-    if not isinstance(metadata, dict):
-        raise ValueError("metadata must be a dict")
-
-    required = ["title", "upload_type", "publication_date", "description", "access_right"]
-    missing = [k for k in required if not metadata.get(k)]
-    if missing:
-        raise ValueError(f"Missing required metadata fields: {missing}")
-
-    ar = metadata.get("access_right")
-    if ar not in ("open", "embargoed", "restricted", "closed"):
-        raise ValueError(f"Invalid access_right='{ar}'")
-
-    if ar in ("open", "embargoed"):
-        if not metadata.get("license"):
-            raise ValueError("license is required when access_right is open/embargoed")
-
-
-def _safe_list_article_files(article_uuid: str, max_files: int = 40) -> List[Dict[str, Any]]:
-    """
-    Lists files under articles/<article_uuid>/.
-    Sends only filenames + basic info to the LLM (not file contents).
-    """
-    base_dir = os.path.join("articles", article_uuid)
-    out: List[Dict[str, Any]] = []
-    if not os.path.isdir(base_dir):
-        return out
-
-    for name in sorted(os.listdir(base_dir)):
-        p = os.path.join(base_dir, name)
-        if not os.path.isfile(p):
-            continue
-        try:
-            size = os.path.getsize(p)
-        except Exception:
-            size = None
-        out.append({"filename": name, "path": p, "size_bytes": size})
-        if len(out) >= max_files:
-            break
-    return out
-
-
 def _filter_patch_to_template(metadata_patch: Dict[str, Any], template: Dict[str, Any]) -> Dict[str, Any]:
     """
     Drop keys not present in the template (prevents hallucinated fields).
@@ -837,6 +775,23 @@ def _safe_list_article_files(article_uuid: str, max_files: int = 50) -> List[Dic
             break
     return out
 
+def fetch_doi_citation(doi: str, style: str = "apa", lang: str = "en-US") -> str:
+    """
+    Fetch formatted citation text from citation.doi.org.
+
+    Example DOI: "10.5281/zenodo.18562168"
+    It will be encoded as: "10.5281%2Fzenodo.18562168"
+    """
+
+    doi_encoded = quote(doi, safe="")  # converts "/" -> "%2F"
+
+    url = f"https://citation.doi.org/format?doi={doi_encoded}&style={style}&lang={lang}"
+
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+
+    return resp.text.strip()
+
 
 def _extract_text_snippets_from_article_files(
         article_uuid: str,
@@ -908,15 +863,6 @@ def _filter_metadata_to_template(metadata: Dict[str, Any], template: Dict[str, A
     allowed = set(template.keys())
     return {k: v for k, v in (metadata or {}).items() if k in allowed}
 
-def _allowed_file(filename: str) -> bool:
-    if not filename:
-        return False
-    if ALLOWED_EXTENSIONS is None:
-        return True
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    return ext in ALLOWED_EXTENSIONS
-
-
 def get_zenodo_metadata_payload_for_article(
     *,
     article_uuid: str,
@@ -986,7 +932,6 @@ def _list_local_article_files(article_uuid: str) -> List[str]:
 
     return collected
 
-
 def _safe_extract_zip(zip_path: str, dest_dir: str) -> List[str]:
     """
     Extract zip into dest_dir safely (prevents Zip Slip).
@@ -1020,7 +965,6 @@ def _safe_extract_zip(zip_path: str, dest_dir: str) -> List[str]:
             extracted_paths.append(target_path)
 
     return extracted_paths
-
 
 def _save_uploaded_files_to_article_folder(article_uuid: str, incoming_files: List[FileStorage]) -> List[str]:
     """
@@ -1060,8 +1004,6 @@ def _save_uploaded_files_to_article_folder(article_uuid: str, incoming_files: Li
                 pass
 
     return saved_paths
-
-
 
 def _paths_to_filestorage(paths: List[str]) -> List[FileStorage]:
     """

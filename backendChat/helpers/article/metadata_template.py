@@ -98,11 +98,6 @@ ZENODO_METADATA_TEMPLATE = {
         "required": False,
         "items": {"identifier": "string"}
     },
-    "grants": {
-        "type": "array",
-        "required": False,
-        "items": {"id": "string"}
-    },
 
     "journal_title": {"type": "string?", "required": False},
     "journal_volume": {"type": "string?", "required": False},

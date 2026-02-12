@@ -1,5 +1,7 @@
 import os
 
+import requests
+from urllib.parse import quote
 from flask import Flask
 from flask_cors import CORS, cross_origin
 from flasgger import Swagger
@@ -15,7 +17,6 @@ from helpers.index import makeResponse
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 swagger = Swagger(app)
-
 @app.route("/", methods=['GET'])
 @cross_origin()
 def home():
@@ -57,6 +58,6 @@ if __name__ == '__main__':
         else:
             print(f"Folder '{cfg.QUESTIONNAIRES_LOCATION}' already exists.")
 
-        app.run(host='0.0.0.0', port=8080)
+        app.run(host='0.0.0.0', port=8081)
     except Exception as e:
         print(str(e))

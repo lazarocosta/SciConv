@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import os
-import re
 import json
+import re
 from datetime import datetime
-
 from werkzeug.datastructures import FileStorage
 
 import config as cfg
@@ -20,7 +19,7 @@ from helpers.article.articleHelper import check_zenodo_metadata, create_zenodo_d
     run_fuji_fair_assessment, upsert_zenodo_deposition_metadata_and_files, \
     _extract_text_snippets_from_article_files, _safe_list_article_files, _filter_metadata_to_template, \
     _ensure_top_level_metadata, get_zenodo_metadata_payload_for_article, _list_local_article_files, \
-    _save_uploaded_files_to_article_folder, _paths_to_filestorage
+    _save_uploaded_files_to_article_folder, _paths_to_filestorage, fetch_doi_citation
 from flask import request
 from helpers.index import makeResponse, appendMessage, callGPTModel, _extract_json_safe
 from helpers.article.metadata_template import ZENODO_METADATA_TEMPLATE
@@ -54,21 +53,20 @@ def analyze_author_datasets_citation_status_using_gpt():
         appendMessage(messagesToUser, "I can’t select your file", stage="Start")
         return makeResponse(messagesToUser, 400, True)
 
-    # ✅ SAVE ALL FILES under articles/<article_uuid>/ (and extract zip if present)
+    # SAVE ALL FILES under articles/<article_uuid>/ (and extract zip if present)
     try:
         saved_paths = _save_uploaded_files_to_article_folder(article_uuid, uploaded_files)
     except Exception as e:
-        appendMessage(messagesToUser, f"Failed to save uploaded files: {str(e)}", stage="Save")
+        appendMessage(messagesToUser, f"Failed to save uploaded files: {str(e)}", stage="Start")
         return makeResponse({"article_uuid": article_uuid, "messages": messagesToUser}, 500, True)
 
     if not saved_paths:
-        appendMessage(messagesToUser, "Uploaded files were empty or invalid", stage="Save")
+        appendMessage(messagesToUser, "Uploaded files were empty or invalid", stage="Start")
         return makeResponse({"article_uuid": article_uuid, "messages": messagesToUser}, 400, True)
 
-    # ✅ Find a PDF to analyze (from upload or extracted zip)
     pdf_candidates = [p for p in saved_paths if isinstance(p, str) and p.lower().endswith(".pdf")]
     if not pdf_candidates:
-        appendMessage(messagesToUser, "No PDF found in upload/zip to analyze.", stage="PDF")
+        appendMessage(messagesToUser, "No PDF found in upload/zip to analyze.", stage="Start")
         return makeResponse({
             "article_uuid": article_uuid,
             "used_files": [os.path.basename(p) for p in saved_paths],
@@ -81,7 +79,7 @@ def analyze_author_datasets_citation_status_using_gpt():
     full_text = _extract_text_from_pdf(pdf_path)
     body_text, refs_text = _split_body_and_references(full_text)
 
-    max_chars = 20000
+    max_chars = 30000
     body_snippet = body_text[:max_chars]
     refs_snippet = refs_text[:max_chars]
 
@@ -188,12 +186,12 @@ def analyze_author_datasets_citation_status_using_gpt():
     }
 
     # # ---- CALL GPT ----
-    # raw_response = callGPTModel([system_prompt, user_prompt])
+    raw_response = callGPTModel([system_prompt, user_prompt])
 
     # ---- JSON EXTRACTION ----
-    # data = _extract_json_safe(raw_response)
+    data = _extract_json_safe(raw_response)
     # todo delete
-    data = {}
+    # data = {}
 
     # Normalize to always produce arrays
     raw_with_refs = (data or {}).get("author_datasets_with_references", []) or []
@@ -215,29 +213,18 @@ def analyze_author_datasets_citation_status_using_gpt():
 
     # If extraction failed, keep empty lists and show an error summary
     if data is None:
-        summary_short = "I couldn't extract dataset information from the article. Please try another PDF."
-        summary_full = summary_short
+        summary_prefix = "I couldn't extract dataset information from the article. Please try another PDF."
     else:
-        summary_short = (
-            "I found datasets in the article.\n"
-            f"Referenced: {len(referenced)}\n"
-            f"Not referenced: {len(non_referenced)}"
-        )
-        summary_full = (
-            "I found datasets in the article.\n\n"
-            f"Referenced datasets: {len(referenced)}\n"
-            f"Datasets without references: {len(non_referenced)}"
-        )
+        summary_prefix = "I found datasets in the article."
 
     # TODO delete
-    summary_full = "I found datasets in the article.\nReferenced: 2\nNot referenced: 0"
-    summary_short = summary_full
-    referenced = [
-        "Curated dataset of 18 computational experiments (E1-E18) | https://doi.org/10.5281/zenodo.15492423",
-        "Reproducibility package of a curated dataset of 18 computational experiments | https://doi.org/10.5281/zenodo.15166258"
-    ]
-    non_referenced = ["new dataset"]
-    # TODO    END
+    # summary_prefix = "I found datasets in the article."
+    # referenced = [
+    #     "Curated dataset of 18 computational experiments (E1-E18) | https://doi.org/10.5281/zenodo.15492423",
+    #     "Reproducibility package of a curated dataset of 18 computational experiments | https://doi.org/10.5281/zenodo.15166258"
+    # ]
+    # non_referenced = ["new dataset"]
+    # # TODO    END
 
     actions = ["infer", "improve", "add", "update", "delete"]
 
@@ -246,7 +233,7 @@ def analyze_author_datasets_citation_status_using_gpt():
         messagesToUser,
         referenced,
         non_referenced,
-        summary_prefix="I found datasets in the article."
+        summary_prefix=summary_prefix
     )
 
     return makeResponse({
@@ -339,382 +326,514 @@ def infer_dataset_metadata_from_article(article_uuid: str):
 
     messagesToUser: List[Dict[str, Any]] = []
     data = request.get_json(silent=True) or {}
-    #
-    # datasets = data.get("datasets") or []
-    # max_return = int(data.get("max_return") or 5)
-    #
-    # # 1) Gather ALL files
-    # files_inventory = _safe_list_article_files(article_uuid)
-    # if not files_inventory:
-    #     appendMessage(
-    #         messagesToUser,
-    #         f"No local files found under articles/{article_uuid}/. Upload files first."
-    #     )
-    #     return makeResponse(messagesToUser, 400, True)
-    #
-    # # 2) Extract snippets
-    # snippets = _extract_text_snippets_from_article_files(
-    #     article_uuid,
-    #     max_files=6,
-    #     max_chars_per_file=40000
-    # )
-    #
-    # # -----------------------------
-    # # Snippet-based license helpers (robust for "snippet"/"text")
-    # # -----------------------------
-    # def _snippets_text() -> str:
-    #     parts: List[str] = []
-    #     for s in snippets or []:
-    #         txt = s.get("snippet")
-    #         if not isinstance(txt, str) or not txt.strip():
-    #             txt = s.get("text")
-    #         if isinstance(txt, str) and txt.strip():
-    #             parts.append(txt)
-    #     return "\n\n".join(parts)
-    #
-    # def _has_clear_open_sharing_evidence(text: str) -> bool:
-    #     t = (text or "").lower()
-    #     markers = [
-    #         "creative commons", "cc-by", "cc by", "cc0", "public domain",
-    #         "mit license", "apache license", "gnu general public license", "gpl",
-    #         "bsd license", "mozilla public license", "mpl",
-    #         "released under", "distributed under the terms of",
-    #         "this dataset is licensed under", "this software is licensed under",
-    #         "open access", "openly available",
-    #     ]
-    #     return any(m in t for m in markers)
-    #
-    # LICENSE_CANDIDATES = [
-    #     "CC-BY-4.0", "CC0-1.0", "MIT", "Apache-2.0",
-    #     "GPL-3.0", "GPL-2.0", "BSD-3-Clause", "BSD-2-Clause", "MPL-2.0",
-    # ]
-    #
-    # def _extract_explicit_license_hint(text: str) -> str:
-    #     t = (text or "")
-    #     for c in LICENSE_CANDIDATES:
-    #         if c in t:
-    #             return c
-    #     return ""
-    #
-    # snippet_text_all = _snippets_text()
-    # open_evidence = _has_clear_open_sharing_evidence(snippet_text_all)
-    # explicit_license_hint = _extract_explicit_license_hint(snippet_text_all)
-    #
-    # # -----------------------------
-    # # Template-driven TOBE objects
-    # # -----------------------------
-    # def _is_placeholder(v: Any) -> bool:
-    #     return isinstance(v, str) and v.strip() == TOBE
-    #
-    # def _make_tobe_object(field: str, spec: Dict[str, Any]) -> Dict[str, Any]:
-    #     obj: Dict[str, Any] = {"_tobefilledbyuser": True, "field": field}
-    #
-    #     enum_vals = spec.get("enum")
-    #     if isinstance(enum_vals, list) and enum_vals:
-    #         obj["allowed_values"] = enum_vals
-    #
-    #     fmt = spec.get("format")
-    #     if isinstance(fmt, str) and fmt:
-    #         if fmt == "date":
-    #             obj["expected_format"] = "YYYY-MM-DD"
-    #             obj["example"] = "2025-01-31"
-    #         else:
-    #             obj["expected_format"] = fmt
-    #
-    #     if "required_if" in spec:
-    #         obj["required_if"] = spec["required_if"]
-    #
-    #     if "allowed_values" in obj:
-    #         obj["message"] = "Select one of the allowed values."
-    #     elif "expected_format" in obj:
-    #         obj["message"] = "Fill in the value using the expected format."
-    #     else:
-    #         obj["message"] = "Fill in this field."
-    #
-    #     return obj
-    #
-    # def _ensure_required_fields(md: Dict[str, Any]) -> Dict[str, Any]:
-    #     md["upload_type"] = "dataset"
-    #
-    #     # title
-    #     if not isinstance(md.get("title"), str) or not md["title"].strip() or _is_placeholder(md["title"]):
-    #         if datasets and isinstance(datasets[0], str) and datasets[0].strip():
-    #             md["title"] = datasets[0].strip()
-    #         else:
-    #             md["title"] = _make_tobe_object("title", ZENODO_METADATA_TEMPLATE.get("title", {}))
-    #
-    #     # publication_date
-    #     pd = md.get("publication_date")
-    #     if (not isinstance(pd, str) or not pd.strip() or _is_placeholder(pd)):
-    #         md["publication_date"] = _make_tobe_object(
-    #             "publication_date", ZENODO_METADATA_TEMPLATE.get("publication_date", {})
-    #         )
-    #
-    #     # description
-    #     desc = md.get("description")
-    #     if (not isinstance(desc, str) or not desc.strip() or _is_placeholder(desc)):
-    #         md["description"] = _make_tobe_object("description", ZENODO_METADATA_TEMPLATE.get("description", {}))
-    #
-    #     # creators
-    #     creators = md.get("creators")
-    #     if not isinstance(creators, list) or len(creators) == 0:
-    #         md["creators"] = [
-    #             {
-    #                 "_tobefilledbyuser": True,
-    #                 "field": "creators[0].name",
-    #                 "required_fields": ["name"],
-    #                 "optional_fields": ["affiliation", "orcid", "gnd"],
-    #                 "message": "At least one creator is required."
-    #             }
-    #         ]
-    #     else:
-    #         cleaned = []
-    #         for c in creators:
-    #             if not isinstance(c, dict):
-    #                 continue
-    #             name = c.get("name")
-    #             if not isinstance(name, str) or not name.strip() or _is_placeholder(name):
-    #                 c["name"] = TOBE
-    #             for k in ("orcid", "gnd"):
-    #                 if k in c and (not isinstance(c[k], str) or not c[k].strip() or _is_placeholder(c[k])):
-    #                     c.pop(k, None)
-    #             cleaned.append(c)
-    #         md["creators"] = cleaned if cleaned else [{"name": TOBE}]
-    #
-    #         fixed = []
-    #         for i, c in enumerate(md["creators"]):
-    #             if isinstance(c, dict) and _is_placeholder(c.get("name")):
-    #                 fixed.append({
-    #                     "_tobefilledbyuser": True,
-    #                     "field": f"creators[{i}].name",
-    #                     "required": True,
-    #                     "message": "Fill creator name (e.g., 'Last, First')."
-    #                 })
-    #             else:
-    #                 fixed.append(c)
-    #         md["creators"] = fixed
-    #
-    #     # access_right (required enum)
-    #     ar = md.get("access_right")
-    #     if not isinstance(ar, str) or not ar.strip() or _is_placeholder(ar):
-    #         md["access_right"] = _make_tobe_object("access_right", ZENODO_METADATA_TEMPLATE.get("access_right", {}))
-    #
-    #     return md
-    #
-    # def _enforce_access_right_and_license(md: Dict[str, Any]) -> Dict[str, Any]:
-    #     ar = md.get("access_right")
-    #
-    #     # access_right unresolved -> suggest license candidates conditionally
-    #     if isinstance(ar, dict) and ar.get("_tobefilledbyuser") is True:
-    #         if _is_placeholder(md.get("license")) or "license" not in md:
-    #             md["license"] = {
-    #                 "_tobefilledbyuser": True,
-    #                 "field": "license",
-    #                 "message": "Select a license ID if you choose access_right=open/embargoed.",
-    #                 "required_if": {"access_right": ["open", "embargoed"]},
-    #                 "possible_solutions": ([explicit_license_hint] if explicit_license_hint else []) + LICENSE_CANDIDATES
-    #             }
-    #         return md
-    #
-    #     ar_norm = ar.strip() if isinstance(ar, str) else ""
-    #
-    #     # prevent hallucinated "open"
-    #     if ar_norm == "open" and not open_evidence:
-    #         ar_norm = "restricted"
-    #         md["access_right"] = "restricted"
-    #
-    #     if ar_norm not in ("open", "embargoed", "restricted", "closed"):
-    #         md["access_right"] = "restricted"
-    #         ar_norm = "restricted"
-    #
-    #     if ar_norm in ("open", "embargoed"):
-    #         lic = md.get("license")
-    #
-    #         # If explicit license exists in snippets and model didn't give it, prefer explicit
-    #         if (not isinstance(lic, str) or not lic.strip() or _is_placeholder(lic)) and explicit_license_hint:
-    #             md["license"] = explicit_license_hint
-    #             return md
-    #
-    #         if (not isinstance(lic, str) or not lic.strip() or _is_placeholder(lic)):
-    #             md["license"] = {
-    #                 "_tobefilledbyuser": True,
-    #                 "field": "license",
-    #                 "message": "License is required when access_right is open/embargoed. Select an appropriate license ID.",
-    #                 "required": True,
-    #                 "possible_solutions": ([explicit_license_hint] if explicit_license_hint else []) + LICENSE_CANDIDATES
-    #             }
-    #     else:
-    #         md.pop("license", None)
-    #         md.pop("embargo_date", None)
-    #         md.pop("access_conditions", None)
-    #
-    #     return md
-    #
-    # def _remove_placeholder_identifiers(md: Dict[str, Any]) -> Dict[str, Any]:
-    #     if "doi" in md and (_is_placeholder(md["doi"]) or (isinstance(md["doi"], str) and not md["doi"].strip())):
-    #         md.pop("doi", None)
-    #     return md
-    #
-    # # -----------------------------
-    # # LLM prompt + retry validator
-    # # -----------------------------
-    # system = (
-    #     "You are a research data curator creating Zenodo deposit metadata.\n"
-    #     "You will be given an article folder with files inventory + text snippets.\n"
-    #     "Goal: infer metadata objects suitable to CREATE Zenodo deposits.\n\n"
-    #     "STRICT RULES:\n"
-    #     "- Return ONLY valid JSON.\n"
-    #     "- Output MUST be exactly: {\"metadata_list\": [ {\"metadata\": {...}}, ... ]}\n"
-    #     "- Each item MUST follow allowed_metadata_template keys/types.\n"
-    #     "- Do NOT invent DOIs/URLs/ORCIDs/grant IDs/licenses.\n"
-    #     "- If you are NOT SURE about an IMPORTANT field, set it to the literal string \"<TOBeFilledByUser>\".\n"
-    #     "- access_right: use \"open\" ONLY if text clearly indicates open sharing; otherwise \"restricted\".\n"
-    #     "- If access_right is open/embargoed and license not explicitly stated, use \"<TOBeFilledByUser>\".\n"
-    # )
-    #
-    # user_payload = {
-    #     "article_uuid": article_uuid,
-    #     "datasets_hint": datasets,
-    #     "max_return": max_return,
-    #     "allowed_metadata_template": ZENODO_METADATA_TEMPLATE,
-    #     "files_inventory": files_inventory,
-    #     "text_snippets": snippets,
-    #     "required_output_schema": {
-    #         "metadata_list": [
-    #             {"metadata": {"title": "", "upload_type": "dataset", "publication_date": "", "description": "", "creators": [], "access_right": ""}}
-    #         ]
-    #     }
-    # }
-    #
-    # def _try_parse_required_schema(raw_text: str) -> Optional[Dict[str, Any]]:
-    #     """
-    #     Returns parsed dict if it matches required schema, else None.
-    #     Required schema:
-    #       - dict with key "metadata_list" as list
-    #       - each item is dict with key "metadata" as dict
-    #     """
-    #     parsed_local = _extract_json_safe(raw_text)
-    #
-    #     if parsed_local is None:
-    #         m = re.search(r"\{.*\}", raw_text or "", flags=re.DOTALL)
-    #         if not m:
-    #             return None
-    #         try:
-    #             parsed_local = json.loads(m.group(0))
-    #         except Exception:
-    #             return None
-    #
-    #     if not isinstance(parsed_local, dict):
-    #         return None
-    #     ml = parsed_local.get("metadata_list")
-    #     if not isinstance(ml, list):
-    #         return None
-    #     for it in ml:
-    #         if not isinstance(it, dict):
-    #             return None
-    #         md = it.get("metadata")
-    #         if not isinstance(md, dict):
-    #             return None
-    #     return parsed_local
-    #
-    # parsed: Optional[Dict[str, Any]] = None
-    # raw: str = ""
-    #
-    # for attempt in range(1, MAX_TRIES + 1):
-    #     messagesToChat = [
-    #         {"role": "system", "content": system},
-    #         {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
-    #     ]
-    #     # On retries, provide corrective instruction with the prior raw output (short)
-    #     if attempt > 1:
-    #         messagesToChat.append({
-    #             "role": "user",
-    #             "content": (
-    #                 "Your previous output did NOT match the required schema.\n"
-    #                 "Return ONLY valid JSON in EXACT shape:\n"
-    #                 "{\"metadata_list\": [{\"metadata\": { ... }}]}\n"
-    #                 "Do not add any other keys at top-level.\n"
-    #             )
-    #         })
-    #
-    #     raw = callGPTModel(messagesToChat)
-    #     parsed = _try_parse_required_schema(raw)
-    #     if parsed is not None:
-    #         break
-    #
-    # if parsed is None:
-    #     appendMessage(
-    #         messagesToUser,
-    #         "LLM did not return the required JSON schema after 3 attempts.",
-    #     )
-    #     return makeResponse(messagesToUser, 500, True)
-    #
-    # # 5) Normalize + filter + enrich placeholders
-    # out_list: List[Dict[str, Any]] = []
-    # for item in parsed["metadata_list"][:max_return]:
-    #     item = _ensure_top_level_metadata(item)
-    #     md = item.get("metadata", {}) if isinstance(item, dict) else {}
-    #     if not isinstance(md, dict):
-    #         continue
-    #
-    #     md = _filter_metadata_to_template(md, ZENODO_METADATA_TEMPLATE)
-    #
-    #     if not md.get("upload_type"):
-    #         md["upload_type"] = "dataset"
-    #
-    #     md = _ensure_required_fields(md)
-    #     md = _enforce_access_right_and_license(md)
-    #     md = _remove_placeholder_identifiers(md)
-    #
-    #     out_list.append({"metadata": md})
-    #
-    # payload = {
-    #     "zenodo_metadata": out_list[:max_return],
-    #     "template": ZENODO_METADATA_TEMPLATE
 
-    # }
-    payload = {
-        "zenodo_metadata": [
-            {
-                "metadata": {
-                    "upload_type": "dataset",
-                    "publication_type": "conference paper",
-                    "publication_date": "2025-07-29",
-                    "title": "CompRep: A Dataset For Computational Reproducibility",
-                    "creators": [
-                        {
-                            "name": "Lázaro Costa",
-                            "affiliation": "University of Porto & INESC TEC, Portugal"
-                        },
-                        {
-                            "name": "Susana Barbosa",
-                            "affiliation": "INESC TEC, Portugal"
-                        },
-                        {
-                            "name": "Jácome Cunha",
-                            "affiliation": "University of Porto & HASLab/INESC TEC, Portugal"
-                        }
-                    ],
-                    "description": "Reproducibility in computational science is increasingly dependent on the ability to faithfully re-execute experiments involving code, data, and software environments. However, assessing the effectiveness of reproducibility tools is difficult due to the lack of standardized benchmarks. To address this, we collected 38 computational experiments from diverse scientific domains and attempted to reproduce each using 8 different reproducibility tools. From this initial pool, we identified 18 experiments that could be successfully reproduced using at least one tool. These experiments form our curated benchmark dataset, which we release along with reproducibility packages to support ongoing evaluation efforts.",
-                    "access_right": "open",
-                    "keywords": [
-                        "Reproducibility",
-                        "Open Science",
-                        "Empirical Evaluation",
-                        "Dataset"
-                    ],
-                    "conference_title": "ACM Conference on Reproducibility and Replicability",
-                    "conference_acronym": "ACM REP ’25",
-                    "conference_dates": "July 29–31, 2025",
-                    "conference_place": "Vancouver, Canada",
-                    "imprint_publisher": "ACM",
-                    "imprint_place": "Rennes, France",
-                    "language": "en"
+    datasets = data.get("datasets") or []
+    max_return = int(data.get("max_return") or 5)
+
+    # 1) Gather ALL files
+    files_inventory = _safe_list_article_files(article_uuid)
+    if not files_inventory:
+        appendMessage(
+            messagesToUser,
+            f"No local files found under articles/{article_uuid}/. Upload files first."
+        )
+        return makeResponse(messagesToUser, 400, True)
+
+    # 2) Extract snippets
+    snippets = _extract_text_snippets_from_article_files(
+        article_uuid,
+        max_files=6,
+        max_chars_per_file=40000
+    )
+
+    # -----------------------------
+    # Snippet-based license helpers (robust for "snippet"/"text")
+    # -----------------------------
+    def _snippets_text() -> str:
+        parts: List[str] = []
+        for s in snippets or []:
+            txt = s.get("snippet")
+            if not isinstance(txt, str) or not txt.strip():
+                txt = s.get("text")
+            if isinstance(txt, str) and txt.strip():
+                parts.append(txt)
+        return "\n\n".join(parts)
+
+    def _has_clear_open_sharing_evidence(text: str) -> bool:
+        t = (text or "").lower()
+        markers = [
+            "creative commons", "cc-by", "cc by", "cc0", "public domain",
+            "mit license", "apache license", "gnu general public license", "gpl",
+            "bsd license", "mozilla public license", "mpl",
+            "released under", "distributed under the terms of",
+            "this dataset is licensed under", "this software is licensed under",
+            "open access", "openly available",
+        ]
+        return any(m in t for m in markers)
+
+    LICENSE_CANDIDATES = [
+        "cc-by-4.0", "cc0-1.0", "mit", "apache-2.0",
+        "gpl-3.0-only", "gpl-2.0-only", "bsd-3-clause-lbnl", "bsd-2-clause", "mpl-2.0", "cc-by-nc-nd-4.0",
+    ]
+
+    def _extract_explicit_license_hint(text: str) -> str:
+        t = (text or "")
+        for c in LICENSE_CANDIDATES:
+            if c in t:
+                return c
+        return ""
+
+    snippet_text_all = _snippets_text()
+    open_evidence = _has_clear_open_sharing_evidence(snippet_text_all)
+    explicit_license_hint = _extract_explicit_license_hint(snippet_text_all)
+
+    # -----------------------------
+    # Template-driven TOBE objects
+    # -----------------------------
+    def _is_placeholder(v: Any) -> bool:
+        return isinstance(v, str) and v.strip() == TOBE
+
+    def _make_tobe_object(field: str, spec: Dict[str, Any]) -> Dict[str, Any]:
+        obj: Dict[str, Any] = {"_tobefilledbyuser": True, "field": field}
+
+        enum_vals = spec.get("enum")
+        if isinstance(enum_vals, list) and enum_vals:
+            obj["allowed_values"] = enum_vals
+
+        fmt = spec.get("format")
+        if isinstance(fmt, str) and fmt:
+            if fmt == "date":
+                obj["expected_format"] = "YYYY-MM-DD"
+                obj["example"] = "2025-01-31"
+            else:
+                obj["expected_format"] = fmt
+
+        if "required_if" in spec:
+            obj["required_if"] = spec["required_if"]
+
+        if "allowed_values" in obj:
+            obj["message"] = "Select one of the allowed values."
+        elif "expected_format" in obj:
+            obj["message"] = "Fill in the value using the expected format."
+        else:
+            obj["message"] = "Fill in this field."
+
+        return obj
+
+    def _ensure_required_fields(md: Dict[str, Any]) -> Dict[str, Any]:
+        md["upload_type"] = "dataset"
+
+        # title
+        if not isinstance(md.get("title"), str) or not md["title"].strip() or _is_placeholder(md["title"]):
+            if datasets and isinstance(datasets[0], str) and datasets[0].strip():
+                md["title"] = datasets[0].strip()
+            else:
+                md["title"] = _make_tobe_object("title", ZENODO_METADATA_TEMPLATE.get("title", {}))
+
+        # publication_date
+        pd = md.get("publication_date")
+        if (not isinstance(pd, str) or not pd.strip() or _is_placeholder(pd)):
+            md["publication_date"] = _make_tobe_object(
+                "publication_date", ZENODO_METADATA_TEMPLATE.get("publication_date", {})
+            )
+
+        # description
+        desc = md.get("description")
+        if (not isinstance(desc, str) or not desc.strip() or _is_placeholder(desc)):
+            md["description"] = _make_tobe_object("description", ZENODO_METADATA_TEMPLATE.get("description", {}))
+
+        # creators
+        creators = md.get("creators")
+        if not isinstance(creators, list) or len(creators) == 0:
+            md["creators"] = [
+                {
+                    "_tobefilledbyuser": True,
+                    "field": "creators[0].name",
+                    "required_fields": ["name"],
+                    "optional_fields": ["affiliation", "orcid", "gnd"],
+                    "message": "At least one creator is required."
                 }
-            }
-        ],
-        "template": ZENODO_METADATA_TEMPLATE
+            ]
+        else:
+            cleaned = []
+            for c in creators:
+                if not isinstance(c, dict):
+                    continue
+                name = c.get("name")
+                if not isinstance(name, str) or not name.strip() or _is_placeholder(name):
+                    c["name"] = TOBE
+                for k in ("orcid", "gnd"):
+                    if k in c and (not isinstance(c[k], str) or not c[k].strip() or _is_placeholder(c[k])):
+                        c.pop(k, None)
+                cleaned.append(c)
+            md["creators"] = cleaned if cleaned else [{"name": TOBE}]
+
+            fixed = []
+            for i, c in enumerate(md["creators"]):
+                if isinstance(c, dict) and _is_placeholder(c.get("name")):
+                    fixed.append({
+                        "_tobefilledbyuser": True,
+                        "field": f"creators[{i}].name",
+                        "required": True,
+                        "message": "Fill creator name (e.g., 'Last, First')."
+                    })
+                else:
+                    fixed.append(c)
+            md["creators"] = fixed
+
+        # access_right (required enum)
+        ar = md.get("access_right")
+        if not isinstance(ar, str) or not ar.strip() or _is_placeholder(ar):
+            md["access_right"] = _make_tobe_object("access_right", ZENODO_METADATA_TEMPLATE.get("access_right", {}))
+
+        return md
+
+    def _enforce_access_right_and_license(md: Dict[str, Any]) -> Dict[str, Any]:
+        ar = md.get("access_right")
+
+        # access_right unresolved -> suggest license candidates conditionally
+        if isinstance(ar, dict) and ar.get("_tobefilledbyuser") is True:
+            if _is_placeholder(md.get("license")) or "license" not in md:
+                md["license"] = {
+                    "_tobefilledbyuser": True,
+                    "field": "license",
+                    "message": "Select a license ID if you choose access_right=open/embargoed.",
+                    "required_if": {"access_right": ["open", "embargoed"]},
+                    "possible_solutions": (
+                                              [explicit_license_hint] if explicit_license_hint else []) + LICENSE_CANDIDATES
+                }
+            return md
+
+        ar_norm = ar.strip() if isinstance(ar, str) else ""
+
+        # prevent hallucinated "open"
+        if ar_norm == "open" and not open_evidence:
+            ar_norm = "restricted"
+            md["access_right"] = "restricted"
+
+        if ar_norm not in ("open", "embargoed", "restricted", "closed"):
+            md["access_right"] = "restricted"
+            ar_norm = "restricted"
+
+        if ar_norm in ("open", "embargoed"):
+            lic = md.get("license")
+
+            # --- Normalize license ---
+            if isinstance(lic, str):
+                lic = lic.strip().lower()
+
+            # --- If explicit license exists in snippets and model didn't give it, prefer explicit ---
+            if (not isinstance(lic, str) or not lic) and explicit_license_hint:
+                md["license"] = explicit_license_hint
+                return md
+
+            # --- Validate license against allowed list ---
+            if isinstance(lic, str):
+
+                # license provided but not allowed
+                if lic not in LICENSE_CANDIDATES:
+
+                    if explicit_license_hint and explicit_license_hint in LICENSE_CANDIDATES:
+                        md["license"] = explicit_license_hint
+                    else:
+                        md["license"] = {
+                            "_tobefilledbyuser": True,
+                            "field": "license",
+                            "message": "License must be one of the allowed values.",
+                            "required": True,
+                            "allowed_values": LICENSE_CANDIDATES
+                        }
+
+                    return md
+
+            # --- License missing or placeholder ---
+            if (not isinstance(lic, str) or not lic or _is_placeholder(lic)):
+                md["license"] = {
+                    "_tobefilledbyuser": True,
+                    "field": "license",
+                    "message": "License is required when access_right is open/embargoed.",
+                    "required": True,
+                    "allowed_values": LICENSE_CANDIDATES
+                }
+        else:
+            md.pop("license", None)
+            md.pop("embargo_date", None)
+            md.pop("access_conditions", None)
+
+        return md
+
+    def _remove_placeholder_identifiers(md: Dict[str, Any]) -> Dict[str, Any]:
+        if "doi" in md and (_is_placeholder(md["doi"]) or (isinstance(md["doi"], str) and not md["doi"].strip())):
+            md.pop("doi", None)
+        return md
+
+    # -----------------------------
+    # LLM prompt + retry validator
+    # -----------------------------
+    system = (
+        "You are a research data curator creating Zenodo deposit metadata.\n"
+        "You will be given an article folder with files inventory + text snippets.\n"
+        "Goal: infer metadata objects suitable to CREATE Zenodo deposits.\n\n"
+        "STRICT RULES:\n"
+        "- Return ONLY valid JSON.\n"
+        "- Output MUST be exactly: {\"metadata_list\": [ {\"metadata\": {...}}, ... ]}\n"
+        "- Each item MUST follow allowed_metadata_template keys/types.\n"
+        "- Do NOT invent DOIs/URLs/ORCIDs/licenses.\n"
+        "- If you are NOT SURE about an IMPORTANT field, set it to the literal string \"<TOBeFilledByUser>\".\n"
+        "- access_right: use \"open\" ONLY if text clearly indicates open sharing; otherwise \"restricted\".\n"
+        "- If access_right is open/embargoed and license not explicitly stated, use \"<TOBeFilledByUser>\".\n"
+    )
+
+    user_payload = {
+        "article_uuid": article_uuid,
+        "datasets_hint": datasets,
+        "max_return": max_return,
+        "allowed_metadata_template": ZENODO_METADATA_TEMPLATE,
+        "files_inventory": files_inventory,
+        "text_snippets": snippets,
+        "required_output_schema": {
+            "metadata_list": [
+                {"metadata": {"title": "", "upload_type": "dataset", "publication_date": "", "description": "",
+                              "creators": [], "access_right": ""}}
+            ]
+        }
     }
+
+    def _try_parse_required_schema(raw_text: str) -> Optional[Dict[str, Any]]:
+        """
+        Returns parsed dict if it matches required schema, else None.
+        Required schema:
+          - dict with key "metadata_list" as list
+          - each item is dict with key "metadata" as dict
+        """
+        parsed_local = _extract_json_safe(raw_text)
+
+        if parsed_local is None:
+            m = re.search(r"\{.*\}", raw_text or "", flags=re.DOTALL)
+            if not m:
+                return None
+            try:
+                parsed_local = json.loads(m.group(0))
+            except Exception:
+                return None
+
+        if not isinstance(parsed_local, dict):
+            return None
+        ml = parsed_local.get("metadata_list")
+        if not isinstance(ml, list):
+            return None
+        for it in ml:
+            if not isinstance(it, dict):
+                return None
+            md = it.get("metadata")
+            if not isinstance(md, dict):
+                return None
+        return parsed_local
+
+    parsed: Optional[Dict[str, Any]] = None
+    raw: str = ""
+
+    for attempt in range(1, MAX_TRIES + 1):
+        messagesToChat = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+        ]
+        # On retries, provide corrective instruction with the prior raw output (short)
+        if attempt > 1:
+            messagesToChat.append({
+                "role": "user",
+                "content": (
+                    "Your previous output did NOT match the required schema.\n"
+                    "Return ONLY valid JSON in EXACT shape:\n"
+                    "{\"metadata_list\": [{\"metadata\": { ... }}]}\n"
+                    "Do not add any other keys at top-level.\n"
+                )
+            })
+
+        raw = callGPTModel(messagesToChat)
+        parsed = _try_parse_required_schema(raw)
+        # parsed= {
+        #     "metadata_list": [
+        #         {
+        #             "metadata": {
+        #                 "upload_type": "dataset",
+        #                 "title": "The \"Podcast\" ECoG dataset",
+        #                 "creators": [
+        #                     {
+        #                         "name": "Zaid Zada",
+        #                         "affiliation": "Princeton Neuroscience Institute and Department of Psychology, Princeton University; New Jersey, 08544, USA."
+        #                     },
+        #                     {
+        #                         "name": "Samuel A. Nastase",
+        #                         "affiliation": "Princeton Neuroscience Institute and Department of Psychology, Princeton University; New Jersey, 08544, USA."
+        #                     },
+        #                     {
+        #                         "name": "Bobbi Aubrey",
+        #                         "affiliation": "Princeton Neuroscience Institute and Department of Psychology, Princeton University; New Jersey, 08544, USA."
+        #                     },
+        #                     {
+        #                         "name": "Itamar Jalon",
+        #                         "affiliation": "Princeton Neuroscience Institute and Department of Psychology, Princeton University; New Jersey, 08544, USA."
+        #                     },
+        #                     {
+        #                         "name": "Ariel Goldstein",
+        #                         "affiliation": "Department of Cognitive and Brain Sciences and Business School, Hebrew University; Jerusalem, 9190501, Israel."
+        #                     },
+        #                     {
+        #                         "name": "Sebastian Michelmann",
+        #                         "affiliation": "Princeton Neuroscience Institute and Department of Psychology, Princeton University; New Jersey, 08544, USA."
+        #                     },
+        #                     {
+        #                         "name": "Haocheng Wang",
+        #                         "affiliation": "Princeton Neuroscience Institute and Department of Psychology, Princeton University; New Jersey, 08544, USA."
+        #                     },
+        #                     {
+        #                         "name": "Liat Hasenfratz",
+        #                         "affiliation": "Princeton Neuroscience Institute and Department of Psychology, Princeton University; New Jersey, 08544, USA."
+        #                     },
+        #                     {
+        #                         "name": "Werner Doyle",
+        #                         "affiliation": "Grossman School of Medicine, New York University; New York, 10016, USA."
+        #                     },
+        #                     {
+        #                         "name": "Daniel Friedman",
+        #                         "affiliation": "Grossman School of Medicine, New York University; New York, 10016, USA."
+        #                     },
+        #                     {
+        #                         "name": "Patricia Dugan",
+        #                         "affiliation": "Grossman School of Medicine, New York University; New York, 10016, USA."
+        #                     },
+        #                     {
+        #                         "name": "Lucia Melloni",
+        #                         "affiliation": "Grossman School of Medicine, New York University; New York, 10016, USA."
+        #                     },
+        #                     {
+        #                         "name": "Sasha Devore",
+        #                         "affiliation": "Grossman School of Medicine, New York University; New York, 10016, USA."
+        #                     },
+        #                     {
+        #                         "name": "Orrin Devinsky",
+        #                         "affiliation": "Grossman School of Medicine, New York University; New York, 10016, USA."
+        #                     },
+        #                     {
+        #                         "name": "Adeen Flinker",
+        #                         "affiliation": "Grossman School of Medicine and Tandon School of Engineering, New York University; New York, 10016, USA."
+        #                     },
+        #                     {
+        #                         "name": "Uri Hasson",
+        #                         "affiliation": "Princeton Neuroscience Institute and Department of Psychology, Princeton University; New Jersey, 08544, USA."
+        #                     }
+        #                 ],
+        #                 "description": "Naturalistic electrocorticography (ECoG) data are a rare but essential resource for studying the brain’s linguistic capabilities. This dataset shares recordings from nine participants (1,330 electrodes) listening to a 30-minute audio podcast (This American Life, “So a Monkey and a Horse Walk Into a Bar: Act One, Monkey in the Middle”). It includes raw and high-gamma band preprocessed ECoG data, auditory stimuli (audio files and aligned word-level transcript), and extracted linguistic features ranging from spectrotemporal properties to phonetic, syntactic, non-contextual and contextual word embeddings. Detailed tutorials are provided for preprocessing, feature extraction, and encoding analyses. The dataset follows BIDS-iEEG standards and is available under CC0 license on OpenNeuro (doi:10.18112/openneuro.ds005574.v1.0.2).",
+        #                 "access_right": "open",
+        #                 "license": "CC0",
+        #                 "doi": "doi:10.18112/openneuro.ds005574.v1.0.2",
+        #                 "keywords": [
+        #                     "ECoG",
+        #                     "electrocorticography",
+        #                     "language comprehension",
+        #                     "naturalistic stimulus",
+        #                     "podcast",
+        #                     "neuroscience",
+        #                     "encoding models",
+        #                     "linguistic features"
+        #                 ],
+        #                 "references": [
+        #                     "Honey et al. (2012). Neuron 76(2):423–434.",
+        #                     "Zada et al. (2025). bioRxiv 2025.02.14.638352"
+        #                 ],
+        #                 "related_identifiers": [
+        #                     {
+        #                         "identifier": "https://hassonlab.github.io/podcast-ecog-tutorials",
+        #                         "relation": "isSupplementTo",
+        #                         "resource_type": "software"
+        #                     },
+        #                     {
+        #                         "identifier": "https://github.com/hassonlab/podcast-ecog-paper",
+        #                         "relation": "isSupplementTo",
+        #                         "resource_type": "software"
+        #                     }
+        #                 ]
+        #             }
+        #         }
+        #     ]
+        # }
+        if parsed is not None:
+            break
+
+    if parsed is None:
+        appendMessage(
+            messagesToUser,
+            "LLM did not return the required JSON schema after 3 attempts.",
+        )
+        return makeResponse(messagesToUser, 500, True)
+
+    # 5) Normalize + filter + enrich placeholders
+    out_list: List[Dict[str, Any]] = []
+    for item in parsed["metadata_list"][:max_return]:
+        item = _ensure_top_level_metadata(item)
+        md = item.get("metadata", {}) if isinstance(item, dict) else {}
+        if not isinstance(md, dict):
+            continue
+
+        md = _filter_metadata_to_template(md, ZENODO_METADATA_TEMPLATE)
+
+        if not md.get("upload_type"):
+            md["upload_type"] = "dataset"
+
+        md = _ensure_required_fields(md)
+        md = _enforce_access_right_and_license(md)
+        md = _remove_placeholder_identifiers(md)
+
+        out_list.append({"metadata": md})
+
+    payload = {
+        "zenodo_metadata": out_list[:max_return],
+        "template": ZENODO_METADATA_TEMPLATE
+
+    }
+    # payload = {
+    #     "zenodo_metadata": [
+    #         {
+    #             "metadata": {
+    #                 "upload_type": "dataset",
+    #                 "publication_type": "conference paper",
+    #                 "publication_date": "2025-07-29",
+    #                 "title": "CompRep: A Dataset For Computational Reproducibility",
+    #                 "creators": [
+    #                     {
+    #                         "name": "Lázaro Costa",
+    #                         "affiliation": "University of Porto & INESC TEC, Portugal"
+    #                     },
+    #                     {
+    #                         "name": "Susana Barbosa",
+    #                         "affiliation": "INESC TEC, Portugal"
+    #                     },
+    #                     {
+    #                         "name": "Jácome Cunha",
+    #                         "affiliation": "University of Porto & HASLab/INESC TEC, Portugal"
+    #                     }
+    #                 ],
+    #                 "description": "Reproducibility in computational science is increasingly dependent on the ability to faithfully re-execute experiments involving code, data, and software environments. However, assessing the effectiveness of reproducibility tools is difficult due to the lack of standardized benchmarks. To address this, we collected 38 computational experiments from diverse scientific domains and attempted to reproduce each using 8 different reproducibility tools. From this initial pool, we identified 18 experiments that could be successfully reproduced using at least one tool. These experiments form our curated benchmark dataset, which we release along with reproducibility packages to support ongoing evaluation efforts.",
+    #                 "access_right": "open",
+    #                 "keywords": [
+    #                     "Reproducibility",
+    #                     "Open Science",
+    #                     "Empirical Evaluation",
+    #                     "Dataset"
+    #                 ],
+    #                 "conference_title": "ACM Conference on Reproducibility and Replicability",
+    #                 "conference_acronym": "ACM REP ’25",
+    #                 "conference_dates": "July 29–31, 2025",
+    #                 "conference_place": "Vancouver, Canada",
+    #                 "imprint_publisher": "ACM",
+    #                 "imprint_place": "Rennes, France",
+    #                 "language": "en"
+    #             }
+    #         }
+    #     ],
+    #     "template": ZENODO_METADATA_TEMPLATE
+    # }
     actions = ["create", "update metadata"]
 
     appendMessage(
@@ -829,63 +948,66 @@ def zenodo_create_dataset_route(article_uuid):
     if not files_for_zenodo:
         appendMessage(messagesToUser, "Could not open any files for upload")
         return makeResponse({"article_uuid": article_uuid, "messages": messagesToUser}, 400, True)
-    zenodo_metadata={}
+    zenodo_metadata = {}
+    citation=""
 
-    # try:
-    #     deposition = create_zenodo_deposition_with_files(metadata_json, files_for_zenodo)
-    #     zenodo_metadata = deposition.get("metadata") or {}
+    try:
+        deposition = create_zenodo_deposition_with_files(metadata_json, files_for_zenodo)
 
-    # except Exception as e:
-    #     appendMessage(messagesToUser, f"Error creating Zenodo deposition: {str(e)}")
-    #     return makeResponse({"article_uuid": article_uuid, "messages": messagesToUser}, 500, True)
-    # finally:
-    #     for fs in files_for_zenodo:
-    #         try:
-    #             fs.stream.close()
-    #         except Exception:
-    #             pass
+        zenodo_metadata = deposition.get("metadata") or {}
+        citation=fetch_doi_citation(zenodo_metadata.get("doi"), style="apa", lang="en-US")
 
-    zenodo_metadata = {
-        "title": "CompRep: A Dataset For Computational Reproducibility",
-        "doi": "10.5281/zenodo.18134102",
-        "publication_date": "2025-07-29",
-        "description": "Reproducibility in computational science is increasingly dependent on the ability to faithfully re-execute experiments involving code, data, and software environments. However, assessing the effectiveness of reproducibility tools is difficult due to the lack of standardized benchmarks. To address this, we collected 38 computational experiments from diverse scientific domains and attempted to reproduce each using 8 different reproducibility tools. From this initial pool, we identified 18 experiments that could be successfully reproduced using at least one tool. These experiments form our curated benchmark dataset, which we release along with reproducibility packages to support ongoing evaluation efforts.",
-        "access_right": "open",
-        "creators": [
-            {
-                "name": "L\u00e1zaro Costa",
-                "affiliation": "University of Porto & INESC TEC, Portugal"
-            },
-            {
-                "name": "Susana Barbosa",
-                "affiliation": "INESC TEC, Portugal"
-            },
-            {
-                "name": "J\u00e1come Cunha",
-                "affiliation": "University of Porto & HASLab/INESC TEC, Portugal"
-            }
-        ],
-        "keywords": [
-            "Reproducibility",
-            "Open Science",
-            "Empirical Evaluation",
-            "Dataset"
-        ],
-        "language": "eng",
-        "license": "cc-zero",
-        "imprint_publisher": "Zenodo",
-        "upload_type": "dataset",
-        "prereserve_doi": {
-            "doi": "10.5281/zenodo.18134102",
-            "recid": 18134102
-        }}
+    except Exception as e:
+        appendMessage(messagesToUser, f"Error creating Zenodo deposition: {str(e)}")
+        return makeResponse({"article_uuid": article_uuid, "messages": messagesToUser}, 500, True)
+    finally:
+        for fs in files_for_zenodo:
+            try:
+                fs.stream.close()
+            except Exception:
+                pass
+
+    # zenodo_metadata = {
+    #     "title": "CompRep: A Dataset For Computational Reproducibility",
+    #     "doi": "10.5281/zenodo.18134102",
+    #     "publication_date": "2025-07-29",
+    #     "description": "Reproducibility in computational science is increasingly dependent on the ability to faithfully re-execute experiments involving code, data, and software environments. However, assessing the effectiveness of reproducibility tools is difficult due to the lack of standardized benchmarks. To address this, we collected 38 computational experiments from diverse scientific domains and attempted to reproduce each using 8 different reproducibility tools. From this initial pool, we identified 18 experiments that could be successfully reproduced using at least one tool. These experiments form our curated benchmark dataset, which we release along with reproducibility packages to support ongoing evaluation efforts.",
+    #     "access_right": "open",
+    #     "creators": [
+    #         {
+    #             "name": "L\u00e1zaro Costa",
+    #             "affiliation": "University of Porto & INESC TEC, Portugal"
+    #         },
+    #         {
+    #             "name": "Susana Barbosa",
+    #             "affiliation": "INESC TEC, Portugal"
+    #         },
+    #         {
+    #             "name": "J\u00e1come Cunha",
+    #             "affiliation": "University of Porto & HASLab/INESC TEC, Portugal"
+    #         }
+    #     ],
+    #     "keywords": [
+    #         "Reproducibility",
+    #         "Open Science",
+    #         "Empirical Evaluation",
+    #         "Dataset"
+    #     ],
+    #     "language": "eng",
+    #     "license": "cc-zero",
+    #     "imprint_publisher": "Zenodo",
+    #     "upload_type": "dataset",
+    #     "prereserve_doi": {
+    #         "doi": "10.5281/zenodo.18134102",
+    #         "recid": 18134102
+    #     }}
 
     actions = ["go to menu", "update metadata"]
 
-
     payload = {
         "zenodo_status": "Zenodo repository created",
-        "zenodo_metadata": zenodo_metadata
+        "zenodo_metadata": zenodo_metadata,
+        "citation": citation
     }
 
     appendMessage(
@@ -964,7 +1086,7 @@ def zenodo_edit_dataset_route(article_uuid, deposition_id):
 @article_bp.route("/article/<article_uuid>/metadata", methods=["GET"])
 @cross_origin()
 @require_auth
-@swag_from("../swagger/article/metadata.yml")
+# @swag_from("../swagger/article/metadata.yml")
 def get_metadata_from_article(article_uuid: str):
     """
     GET /article/<article_uuid>/metadata?doi=<doi-or-zenodo-url-or-doi-url>

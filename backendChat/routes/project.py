@@ -915,6 +915,8 @@ def researchArtifactChat(projectUuid):
 
     requestData = json.loads(request.data)
     messagesToUser = []
+    messagesToUser = return_messages(requestData, messagesToUser)
+
 
     if "dockerImageId" not in requestData:
         appendMessage(messagesToUser, contentShort="The dockerImageId is required", stage="BuildDockerFile")
@@ -922,7 +924,6 @@ def researchArtifactChat(projectUuid):
     dockerImageID = requestData["dockerImageId"]
     # dockerImageID = "20240820192103"
 
-    messagesToUser = return_messages(requestData, messagesToUser)
     write_messagesUser_to_file(messagesToUser, projectPath)
 
     commandToRun = return_commands_to_use(requestData, messagesToUser)

@@ -1,102 +1,72 @@
-Infer dataset-level metadata from a research article
 ---
+# Infer dataset-level metadata from a research article
 tags:
   - Article
-
 consumes:
-  - multipart/form-data
+  - application/json   # ← alterado: o endpoint espera JSON no body (request.get_json())
 produces:
   - application/json
-
 parameters:
+  - name: article_uuid
+    in: path
+    required: true
+    type: string
+    description: Unique identifier of the article processing session (e.g. 20250130_143022)
   - name: Authorization
     in: header
     required: true
     type: string
     default: "Bearer my-secret-token"
     description: Bearer authentication token.
-
-  - name: file
+  - name: max_return
     in: formData
     required: false
-    type: file
-    description: >
-      PDF file containing the research article. The system will extract text
-      from the article and use an LLM to infer Zenodo-style metadata for a
-      specific dataset mentioned in the article.
-
-  - name: dataset_name
-    in: formData
-    required: true
-    type: string
-    description: >
-      Name of the dataset created/collected/curated by the authors in this article
-      for which metadata should be inferred (e.g. "HospitalX-CXR Collection").
-
+    type: integer
+    default: 5
+    description: Maximum number of metadata objects to infer and return.
 responses:
   200:
     description: >
-      Article processed successfully. The response contains inferred metadata
-      for the specified dataset, structured similarly to a Zenodo record
-      (identity, creators_contributors, content, relationships, rights,
-      coverage, funding, classification), wrapped in the standard messages format.
+      Metadata inferred successfully. Returns the standard application response format 
+      with a list of messages (the last one usually containing the inferred Zenodo metadata 
+      in `contentShort` and `content` under `zenodo_metadata`).
     schema:
-      type: array
-      items:
-        type: object
-        properties:
-          role:
+      type: object
+      properties:
+        actions:
+          type: array
+          items:
             type: string
-          jsonObject:
-            type: boolean
-          contentShort:
-            type: string
-            description: Short human-readable summary of the inferred metadata.
-          content:
-            description: >
-              Detailed inferred metadata for the dataset. Typically a JSON object
-              with a structure like:
-              {
-                "record_id": null,
-                "conceptrecid": null,
-                "doi": "10.xxxx/xxxxx",
-                "doi_url": null,
-                "title": "HospitalX-CXR Collection",
-                "publication_date": "2024-01-15",
-                "access_right": "open",
-                "status": null,
-                "created": null,
-                "updated": null,
-                "links": {
-                  "html": null,
-                  "api": null,
-                  "files": null
-                },
-                "dataset_name": "HospitalX-CXR Collection",
-                "sections": {
-                  "identity": {
-                    "fields": {
-                      "title": { "present": true, "value": "HospitalX-CXR Collection" },
-                      "doi": { "present": false, "value": "" },
-                      "upload_type": { "present": true, "value": "dataset" },
-                      "resource_type_type": { "present": true, "value": "dataset" },
-                      "resource_type_title": { "present": true, "value": "Dataset" },
-                      "version": { "present": false, "value": "" },
-                      "publication_date": { "present": true, "value": "2024" }
-                    },
-                    "present": ["title", "upload_type", "resource_type_type", "resource_type_title", "publication_date"],
-                    "missing": ["doi", "version"]
-                  },
-                  "creators_contributors": { ... },
-                  "content": { ... },
-                  "relationships": { ... },
-                  "rights": { ... },
-                  "coverage": { ... },
-                  "funding": { ... },
-                  "classification": { ... }
-                }
-              }
-          stage:
-            type: string
-            description: >
-              Workflow stage identifier (for example, "DatasetMetadataInferenceCompleted").
+          example: ["create", "update metadata"]
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                example: "assistant"
+              jsonObject:
+                type: boolean
+                example: true
+              contentShort:
+                type: object
+                description: Short/summary version for UI
+              content:
+                type: object
+                description: Full payload with inferred metadata
+                properties:
+                  zenodo_metadata:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        metadata:
+                          type: object
+                          additionalProperties: true
+                  template:
+                    type: object
+                    additionalProperties: true
+              stage:
+                type: string
+                example: "DatasetMetadataInferenceCompleted"
