@@ -58,6 +58,6 @@ if __name__ == '__main__':
         else:
             print(f"Folder '{cfg.QUESTIONNAIRES_LOCATION}' already exists.")
 
-        app.run(host='0.0.0.0', port=8081)
+        app.run(host='0.0.0.0', port=8080)
     except Exception as e:
         print(str(e))
