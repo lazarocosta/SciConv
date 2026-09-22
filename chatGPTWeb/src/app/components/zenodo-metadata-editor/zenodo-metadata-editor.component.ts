@@ -210,11 +210,40 @@ export class ZenodoMetadataEditorComponent implements OnChanges {
             return; // IMPORTANT: stop here
         }
 
-        // 2) Draft changed but template didn't => DO NOT rebuild the form
-        // Just patch values (and don't steal focus)
+        // 2) Draft changed but template didn't => patch scalar controls, but REBUILD
+        // FormArrays so that newly-arrived items (e.g. keywords) are correctly
+        // populated. FormArray.patchValue() only patches existing indices — it
+        // never adds new ones, so an array that was built empty stays empty.
         if (changes['draft'] && this.form) {
             const values = this.draft ?? {};
+            this._syncArrayControls(this.form, this.schemaRoot, values);
             this.form.patchValue(values, { emitEvent: false });
+        }
+    }
+
+    /**
+     * For every array field in the schema, replace the FormArray contents so
+     * that the number of controls matches the incoming values array.
+     * This is necessary because FormArray.patchValue() does NOT add/remove items.
+     */
+    private _syncArrayControls(
+        group: FormGroup,
+        schema: Record<string, JsonSchema>,
+        values: any,
+    ) {
+        for (const [key, rule] of Object.entries(schema || {})) {
+            if (rule.type !== 'array') continue;
+            const arr = group.get(key) as FormArray | null;
+            if (!arr) continue;
+
+            const newVals: any[] = Array.isArray(values?.[key]) ? values[key] : [];
+            if (arr.length === newVals.length) continue; // nothing to do
+
+            // Clear and repopulate
+            while (arr.length > 0) arr.removeAt(0, { emitEvent: false });
+            for (const x of newVals) {
+                arr.push(this.buildControl(rule, x), { emitEvent: false });
+            }
         }
     }
 

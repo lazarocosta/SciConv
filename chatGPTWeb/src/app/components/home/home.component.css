@@ -4,6 +4,120 @@
     align-items: center;
 }
 
+/* ── Repro onboarding overview ── */
+.repro-intro {
+    max-width: 90%;
+    margin: 16px auto;
+    background: #f8f9ff;
+    border: 1px solid #d0d7ff;
+    border-radius: 8px;
+    padding: 20px 24px;
+}
+.repro-intro-lead {
+    font-weight: 600;
+    margin: 0 0 12px;
+    color: #333;
+}
+.repro-intro-steps {
+    margin: 0 0 20px;
+    padding-left: 20px;
+    line-height: 1.9;
+    color: #444;
+    font-size: 14px;
+}
+.repro-intro-steps li { margin-bottom: 4px; }
+.repro-intro-steps code {
+    background: #eee;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 13px;
+}
+.get-started-btn {
+    background: #4a6cf7;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.get-started-btn:hover { background: #3a5ce5; }
+
+/* ── Progress stepper ── */
+.repro-stepper {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    padding: 14px 16px 10px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    flex-wrap: wrap;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+}
+
+.repro-stepper-spacer {
+    height: 80px;
+}
+.stepper-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    min-width: 60px;
+    position: relative;
+}
+.stepper-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    width: 100%;
+    height: 2px;
+    background: #d0d0d0;
+    z-index: -1;
+}
+.stepper-step.stepper-done:not(:last-child)::after { background: #4a6cf7; }
+.stepper-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    background: #e0e0e0;
+    color: #888;
+    border: 2px solid #d0d0d0;
+    z-index: 1;
+}
+.stepper-done .stepper-circle {
+    background: #4a6cf7;
+    color: #fff;
+    border-color: #4a6cf7;
+}
+.stepper-active .stepper-circle {
+    background: #fff;
+    color: #4a6cf7;
+    border-color: #4a6cf7;
+    box-shadow: 0 0 0 3px rgba(74,108,247,0.15);
+}
+.stepper-label {
+    font-size: 10px;
+    margin-top: 4px;
+    color: #888;
+    text-align: center;
+    white-space: nowrap;
+}
+.stepper-active .stepper-label { color: #4a6cf7; font-weight: 600; }
+.stepper-done .stepper-label { color: #4a6cf7; }
+
 .info-message {
     background-color: #f1f8ff;
     border-left: 4px solid #007bff;
@@ -108,6 +222,37 @@
     color: white;
     border-radius: 4px;
     cursor: pointer;
+}
+
+.skip-btn {
+    background-color: #6c757d;
+    margin-left: 6px;
+}
+
+.upload-hint {
+    margin: 0;
+    font-size: 12px;
+    color: #888;
+    line-height: 1.5;
+}
+
+.upload-data-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background-color: #5a6fd6;
+    color: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-left: 6px;
+    user-select: none;
+}
+
+.upload-data-btn.disabled {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .chat-message span {
@@ -250,9 +395,161 @@ button {
     opacity: 0.8;
 }
 
+/* Data Extension Layer — upload form */
+.data-layer-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0;
+    cursor: pointer;
+}
+
+.data-layer-toggle input[type="checkbox"] {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.data-layer-options {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #f9f9f9;
+    margin-bottom: 10px;
+}
+
+.mode-selector {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 10px;
+}
+
+.mode-selector label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.data-input {
+    margin-top: 8px;
+}
+
+.form-label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 4px;
+    font-size: 13px;
+}
+
+.run-progress-detail {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #555;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .zenodo-status{
     color: #1b5e20;
 }
 .zenodo-status::before{
     content: "✓ ";
+}
+
+/* Mode selection buttons on Welcome screen */
+.mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    background-color: #fff;
+    color: #333;
+    border: 2px solid #007bff;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+    margin-bottom: 0;
+    width: 100%;
+    max-width: 520px;
+    line-height: 1.4;
+}
+
+.mode-btn:hover {
+    background-color: #007bff;
+    color: #fff;
+}
+
+.mode-btn-title {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.mode-btn-desc {
+    font-size: 12px;
+    opacity: 0.8;
+    white-space: normal;
+}
+
+/* Run failure recovery buttons */
+.recovery-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    background-color: #fff;
+    color: #333;
+    border: 2px solid #dc3545;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    max-width: 460px;
+    transition: background-color 0.15s, color 0.15s;
+    margin-bottom: 0;
+}
+
+.recovery-btn:hover {
+    background-color: #dc3545;
+    color: #fff;
+}
+
+.recovery-btn--secondary {
+    border-color: #6c757d;
+    color: #555;
+}
+
+.recovery-btn--secondary:hover {
+    background-color: #6c757d;
+    color: #fff;
+}
+
+.recovery-desc {
+    font-size: 11px;
+    font-weight: normal;
+    opacity: 0.75;
+}
+
+/* Start over link bar */
+.start-over-bar {
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+.start-over-bar a {
+    color: #888;
+    text-decoration: none;
+}
+
+.start-over-bar a:hover {
+    color: #333;
+    text-decoration: underline;
 }

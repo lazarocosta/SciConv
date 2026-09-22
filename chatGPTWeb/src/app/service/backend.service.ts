@@ -122,6 +122,57 @@ export class BackendService {
             {headers: this.headers});
     }
 
+    specifyOutputs(projectUuid: string, messages: Message[]) {
+        return this.http.post(`${this.baseUrl}/project/${projectUuid}/specify-outputs`, {
+                messages: messages
+            },
+            {headers: this.headers});
+    }
+
+    skipOutputs(projectUuid: string) {
+        return this.http.post(`${this.baseUrl}/project/${projectUuid}/specify-outputs`, {
+                skip: true
+            },
+            {headers: this.headers});
+    }
+
+    getRunProgress(projectUuid: string) {
+        return this.http.get(`${this.baseUrl}/project/${projectUuid}/run-progress`,
+            {headers: this.headers});
+    }
+
+    inferArtifactMetadata(projectUuid: string) {
+        return this.http.get(
+            `${this.baseUrl}/project/${projectUuid}/infer-artifact-metadata`,
+            {headers: this.headers});
+    }
+
+    uploadArtifactToZenodo(projectUuid: string, body: any = {}) {
+        return this.http.post(
+            `${this.baseUrl}/project/${projectUuid}/upload-artifact-to-zenodo`,
+            body, {headers: this.headers});
+    }
+
+    reproduceFromDoiInit(artifactDoi: string) {
+        return this.http.post(
+            `${this.baseUrl}/project/reproduce-from-doi/init`,
+            {artifact_doi: artifactDoi}, {headers: this.headers});
+    }
+
+    reproduceRun(newProjectUuid: string) {
+        return this.http.post(
+            `${this.baseUrl}/project/${newProjectUuid}/reproduce-run`,
+            {}, {headers: this.headers});
+    }
+
+    getOutputFileUrl(projectUuid: string, filename: string): string {
+        return `${this.baseUrl}/project/${projectUuid}/download-output/${filename}`;
+    }
+
+    getArtifactDownloadUrl(projectUuid: string): string {
+        return `${this.baseUrl}/project/${projectUuid}/download-artifact`;
+    }
+
     findConfigurationsFunc(projectUuid: string, messages: Message[], myMessage: any) {
         return this.http.post(`${this.baseUrl}/project/${projectUuid}/find-configurations-change`, {
                 messages: messages,
@@ -133,6 +184,52 @@ export class BackendService {
     uploadProject(formData: FormData) {
         return this.http.post(`${this.baseUrl}/project/upload-project`, formData,
             {headers: this.headers});
+    }
+
+    provideData(projectUuid: string, payload: FormData | object) {
+        if (payload instanceof FormData) {
+            return this.http.post(
+                `${this.baseUrl}/project/${projectUuid}/provide-data`,
+                payload,
+                {headers: this.headers}
+            );
+        }
+        return this.http.post(
+            `${this.baseUrl}/project/${projectUuid}/provide-data`,
+            payload,
+            {headers: this.headers}
+        );
+    }
+
+    universalChat(projectUuid: string, message: string, stage: string, recentMessages: any[]) {
+        return this.http.post<{ reply: string; action: string | null; target_stage: string | null }>(
+            `${this.baseUrl}/project/${projectUuid}/universal-chat`,
+            { message, stage, recent_messages: recentMessages },
+            { headers: this.headers }
+        );
+    }
+
+    inferOutputFolder(projectUuid: string) {
+        return this.http.get<{ folder: string | null }>(
+            `${this.baseUrl}/project/${projectUuid}/infer-output-folder`,
+            {headers: this.headers}
+        );
+    }
+
+    inferDatasetMetadata(projectUuid: string) {
+        return this.http.post(
+            `${this.baseUrl}/project/${projectUuid}/infer-dataset-metadata`,
+            {},
+            {headers: this.headers}
+        );
+    }
+
+    externalizeData(projectUuid: string, metadata?: any) {
+        return this.http.post(
+            `${this.baseUrl}/project/${projectUuid}/externalize-data`,
+            metadata ? {metadata} : {},
+            {headers: this.headers}
+        );
     }
 
     uploadArticleFindInformation(formData: FormData) {
@@ -180,4 +277,20 @@ export class BackendService {
 
 
 
+    // ── Standalone Data Upload to Zenodo ──────────────────────────────────────
+
+    uploadDataDirect(formData: FormData) {
+        return this.http.post(`${this.baseUrl}/data-upload/upload`, formData,
+            {headers: this.headers});
+    }
+
+    confirmDataUpload(uuid: string, body: any) {
+        return this.http.post(`${this.baseUrl}/data-upload/${uuid}/confirm`, body,
+            {headers: this.headers});
+    }
+
+    getDataUploadProgress(uuid: string) {
+        return this.http.get(`${this.baseUrl}/data-upload/${uuid}/progress`,
+            {headers: this.headers});
+    }
 }

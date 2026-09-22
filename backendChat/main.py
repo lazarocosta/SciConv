@@ -10,6 +10,7 @@ import config as cfg
 from routes.project import project_bp
 from routes.survey import survey_bp
 from routes.article import article_bp
+from routes.data_upload import data_upload_bp, DATA_UPLOADS_LOCATION
 
 from helpers.project.projectHelper import startDockerClient
 from helpers.index import makeResponse
@@ -17,6 +18,7 @@ from helpers.index import makeResponse
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
 swagger = Swagger(app)
+
 @app.route("/", methods=['GET'])
 @cross_origin()
 def home():
@@ -33,6 +35,7 @@ def home():
 app.register_blueprint(project_bp)
 app.register_blueprint(survey_bp)
 app.register_blueprint(article_bp)
+app.register_blueprint(data_upload_bp)
 
 
 if __name__ == '__main__':
@@ -58,6 +61,12 @@ if __name__ == '__main__':
         else:
             print(f"Folder '{cfg.QUESTIONNAIRES_LOCATION}' already exists.")
 
-        app.run(host='0.0.0.0', port=8081)
+        if not os.path.exists(DATA_UPLOADS_LOCATION):
+            os.makedirs(DATA_UPLOADS_LOCATION)
+            print(f"Folder '{DATA_UPLOADS_LOCATION}' created.")
+        else:
+            print(f"Folder '{DATA_UPLOADS_LOCATION}' already exists.")
+
+        app.run(host='0.0.0.0', port=8080)
     except Exception as e:
         print(str(e))

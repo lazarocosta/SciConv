@@ -15,6 +15,8 @@ __pycache__
 
 projects/
 !projects_example/**/*.zip
+data_uploads/
 
 .env.local
-
+nul
+staged-humming-milner.md

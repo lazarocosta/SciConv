@@ -42,7 +42,15 @@
                 <!-- STRING -->
                 <div *ngSwitchCase="'string'">
                     <label>{{ e.key }}</label>
-                    <input type="text" [formControl]="group.get(e.key)" />
+                    <ng-container *ngIf="e.key === 'description'; else textInput">
+                        <textarea [formControl]="group.get(e.key)"
+                                  rows="6"
+                                  style="width:100%; resize:vertical; font-family:inherit; font-size:inherit; padding:6px; box-sizing:border-box;">
+                        </textarea>
+                    </ng-container>
+                    <ng-template #textInput>
+                        <input type="text" [formControl]="group.get(e.key)" />
+                    </ng-template>
                     <div *ngIf="group.get(e.key)?.touched && group.get(e.key)?.hasError('required')" style="color:red;">
                         Required
                     </div>

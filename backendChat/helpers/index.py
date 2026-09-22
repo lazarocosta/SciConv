@@ -44,9 +44,10 @@ def appendMessage(messages, content, contentShort=None, stage=None, role="assist
 
     messages.append(message)
 
+
 def return_messages(requestData, messagesToUser):
     if "messages" not in requestData:
-        appendMessage(messagesToUser, content="I can’t find the messages", stage="Start")
+        appendMessage(messagesToUser, "I can’t find the messages", stage="Start")
         return makeResponse(messagesToUser, status=200, isJson=True)
 
     return requestData["messages"]
@@ -68,12 +69,13 @@ def callGPTModel(messagesToChat, modelUsed="o4-mini"):
     if not openai_api_key:
         raise EnvironmentError("Missing OPENAI_API_KEY in environment or .env file.")
 
-    client = OpenAI(api_key=openai_api_key)
+    # timeout=120: raise an error after 2 minutes rather than hanging forever
+    client = OpenAI(api_key=openai_api_key, timeout=120)
 
     completion = client.chat.completions.create(
         model=modelUsed,
         messages=messagesToChat,
-        #temperature=temperature,
+        temperature=temperature,
     )
 
     result = completion.choices[0].message.content

@@ -211,7 +211,7 @@ def write_messagesUser_to_file(messagesToUser, projectPath):
 
 def return_commands_to_use(requestData, messagesToUser):
     if "commandToRun" not in requestData:
-        appendMessage(messagesToUser, contentShort="The commandToRun is required", stage="ParametersToUse")
+        appendMessage(messagesToUser, "The commandToRun is required", stage="ParametersToUse")
         return makeResponse(messagesToUser)
 
     commandToRun = requestData["commandToRun"]
@@ -230,7 +230,7 @@ def return_commands_to_use(requestData, messagesToUser):
 #         length = len(messagesToChat)
 #         myMessage = messagesToChat[length - 1]["content"]
 #     else:
-#         appendMessage(messagesToUser, contentShort='Messages are missing', stage="Start")
+#         appendMessage(messagesToUser, 'Messages are missing', stage="Start")
 #         return makeResponse(messagesToUser, 201, True)
 #     try:
 #
@@ -294,7 +294,7 @@ def return_commands_to_use(requestData, messagesToUser):
 #             print(messageText)
 #
 #             if messageText == "ParametersToUse":
-#                 appendMessage(messagesToUser, contentShort="Please provide a valid command.", stage="ParametersToUse")
+#                 appendMessage(messagesToUser, "Please provide a valid command.", stage="ParametersToUse")
 #             else:
 #                 appendMessage(messagesToUser, content=messageText,
 #                               contentShort="I will use this command to execute the experiment.\n "
@@ -324,7 +324,7 @@ def return_commands_to_use(requestData, messagesToUser):
 #             messageText = completion.choices[0].message.content
 #             print(messageText)
 #             if messageText == "NO":
-#                 appendMessage(messagesToUser, contentShort="Please provide the new location of the project.",
+#                 appendMessage(messagesToUser, "Please provide the new location of the project.",
 #                               stage="ProjectLocation")
 #             else:
 #                 directoryPath = 'projects/' + messageText
@@ -335,7 +335,7 @@ def return_commands_to_use(requestData, messagesToUser):
 #                                   stage="ParametersToUse")
 #                 else:
 #                     print("Folder does not exist.")
-#                     appendMessage(messagesToUser, contentShort="Folder does not exist.", stage="ProjectLocation")
+#                     appendMessage(messagesToUser, "Folder does not exist.", stage="ProjectLocation")
 #
 #         # TODO comentar
 #         # message2 = {"role": "system",
@@ -364,7 +364,7 @@ def return_commands_to_use(requestData, messagesToUser):
 #         filenames = requestData["filenames"]
 #         # filenames= ['main.py', 'main2.py', 'main3.py', 'new\\main.py', 'new\\main2.py', 'new\\main3.py', 'new\\newnew\\main2.py', 'new\\newnew\\main3.py']
 #     else:
-#         appendMessage(messagesToUser, contentShort='Filenames are missing', stage="Start")
+#         appendMessage(messagesToUser, 'Filenames are missing', stage="Start")
 #         return makeResponse(messagesToUser, 201, True)
 #
 #     # filenames = ['main.py']
@@ -437,7 +437,7 @@ def return_commands_to_use(requestData, messagesToUser):
 #     messagesToChat = []
 #
 #     if "filenames" not in requestData:
-#         appendMessage(messagesToUser, contentShort='filenames are missing', stage="Start")
+#         appendMessage(messagesToUser, 'filenames are missing', stage="Start")
 #         return makeResponse(messagesToUser, 201, True)
 #
 #     filenames = requestData["filenames"]
@@ -456,7 +456,7 @@ def return_commands_to_use(requestData, messagesToUser):
 #             else:
 #                 print(f"File not found: {filename}")
 #     except Exception as error:
-#         appendMessage(messagesToUser, contentShort=str(error), stage="Start")
+#         appendMessage(messagesToUser, str(error), stage="Start")
 #         return makeResponse(messagesToUser, 201, True)
 #
 #     # Convert the content to JSON format

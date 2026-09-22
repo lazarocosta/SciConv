@@ -6,7 +6,7 @@ export const environment = {
   //baseUrl: 'http://127.0.0.1:8080'
   //funciona localmente
 
-  baseUrl: 'http://sciconv.inesctec.pt:8080',
+  baseUrl: '/api',
   //funcionou com as portas abertas
 
   //baseUrl: 'http://194.117.30.76:8080', //funcionou

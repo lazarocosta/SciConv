@@ -1,0 +1,65 @@
+Save the output file specification for an experiment
+---
+tags:
+  - Project
+
+consumes:
+  - application/json
+produces:
+  - application/json
+
+parameters:
+  - name: Authorization
+    in: header
+    type: string
+    required: true
+    default: "Bearer my-secret-token"
+    description: Bearer authentication token.
+
+  - name: projectUuid
+    in: path
+    type: string
+    required: true
+    description: Unique ID of the project.
+
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          description: Conversation messages. Last message should contain the output spec.
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+              content:
+                type: string
+
+responses:
+  200:
+    description: Output spec saved. Returns next stage (FindConfigurations).
+    schema:
+      type: array
+      items:
+        type: object
+        properties:
+          role:
+            type: string
+          contentShort:
+            type: string
+          content:
+            type: string
+          stage:
+            type: string
+
+  401:
+    description: Unauthorized – missing or invalid Bearer token.
+
+  500:
+    description: Unexpected error saving output specification.
