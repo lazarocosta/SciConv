@@ -955,7 +955,7 @@ def zenodo_create_dataset_route(article_uuid):
         deposition = create_zenodo_deposition_with_files(metadata_json, files_for_zenodo)
 
         zenodo_metadata = deposition.get("metadata") or {}
-        citation=fetch_doi_citation(zenodo_metadata.get("doi"), style="apa", lang="en-US")
+        #citation=fetch_doi_citation(zenodo_metadata.get("doi"), style="apa", lang="en-US")
 
     except Exception as e:
         appendMessage(messagesToUser, f"Error creating Zenodo deposition: {str(e)}")

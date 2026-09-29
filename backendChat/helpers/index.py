@@ -75,7 +75,7 @@ def callGPTModel(messagesToChat, modelUsed="o4-mini"):
     completion = client.chat.completions.create(
         model=modelUsed,
         messages=messagesToChat,
-        temperature=temperature,
+        #temperature=temperature,
     )
 
     result = completion.choices[0].message.content
