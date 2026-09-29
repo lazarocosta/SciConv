@@ -433,9 +433,11 @@ def infer_dataset_metadata_from_article(article_uuid: str):
         # publication_date
         pd = md.get("publication_date")
         if (not isinstance(pd, str) or not pd.strip() or _is_placeholder(pd)):
-            md["publication_date"] = _make_tobe_object(
+            #md["publication_date"] = _make_tobe_object(
                 "publication_date", ZENODO_METADATA_TEMPLATE.get("publication_date", {})
-            )
+            #)
+        md["publication_date"] = datetime.now().date().isoformat()
+
 
         # description
         desc = md.get("description")
